@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:uni_track/core/theme/app_theme.dart';
 import 'package:uni_track/features/dashboard/widgets/semester_progress.dart';
+import 'package:uni_track/shared/services/local_storage_service.dart';
 
 class DashboardHeader extends StatelessWidget {
   const DashboardHeader({super.key});
@@ -54,42 +55,63 @@ class DashboardHeader extends StatelessWidget {
           SizedBox(height: screenHeight * 0.01),
 
           // Row with greeting and profile pic
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Greeting text
-              const Text(
-                "Good morning, Alex 👋",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.5,
-                ),
-              ),
+          FutureBuilder<List<dynamic>>(
+            future: Future.wait([
+              localStorageService.getUserName(),
+              localStorageService.getPendingAssignmentsCount(),
+            ]),
+            builder: (context, snapshot) {
+              final name = snapshot.hasData
+                  ? (snapshot.data![0] as String)
+                  : 'Alex';
 
-              // Profile picture at top right
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppTheme.accentBabyBlue, width: 2),
-                ),
-                child: const CircleAvatar(
-                  radius: 22,
-                  backgroundColor: Colors.white24,
-                  child: Icon(Icons.person, color: Colors.white, size: 26),
-                ),
-              ),
-            ],
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Greeting text
+                  Text(
+                    "Good morning, $name 👋",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+
+                  // Profile picture at top right
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppTheme.accentBabyBlue,
+                        width: 2,
+                      ),
+                    ),
+                    child: const CircleAvatar(
+                      radius: 22,
+                      backgroundColor: Colors.white24,
+                      child: Icon(Icons.person, color: Colors.white, size: 26),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
 
           SizedBox(height: screenHeight * 0.015),
 
           // Pending assignments text
-          const Text(
-            "You have 3 pending assignments",
-            style: TextStyle(color: Colors.white70, fontSize: 15),
+          FutureBuilder<int>(
+            future: localStorageService.getPendingAssignmentsCount(),
+            builder: (context, snapshot) {
+              final count = snapshot.hasData ? snapshot.data! : 0;
+              return Text(
+                "You have $count pending assignments",
+                style: const TextStyle(color: Colors.white70, fontSize: 15),
+              );
+            },
           ),
           const SizedBox(height: 24),
           const SemesterProgress(),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uni_track/core/theme/app_theme.dart';
+import 'package:uni_track/shared/services/local_storage_service.dart';
 
 class StatsCards extends StatelessWidget {
   const StatsCards({super.key});
@@ -7,70 +8,78 @@ class StatsCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final screenWidth = constraints.maxWidth;
-          final isSmallScreen = screenWidth < 600;
-          final isMediumScreen = screenWidth >= 600 && screenWidth < 900;
+      child: FutureBuilder<int>(
+        future: localStorageService.getPendingAssignmentsCount(),
+        builder: (context, snap) {
+          final pendingValue = snap.hasData ? snap.data!.toString() : '0';
 
-          // Responsive calculations based on available width
-          final cardWidth = isSmallScreen
-              ? screenWidth * 0.28 // 28% of screen on mobile
-              : (isMediumScreen ? 140.0 : 160.0);
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final screenWidth = constraints.maxWidth;
+              final isSmallScreen = screenWidth < 600;
+              final isMediumScreen = screenWidth >= 600 && screenWidth < 900;
 
-          final cardPadding = isSmallScreen ? 16.0 : 20.0;
-          final iconSize = isSmallScreen ? 26.0 : 32.0;
-          final valueFontSize = isSmallScreen ? 20.0 : 24.0;
-          final labelFontSize = isSmallScreen ? 11.0 : 13.0;
-          final gapBetweenCards = isSmallScreen ? 12.0 : 16.0;
+              // Responsive calculations based on available width
+              final cardWidth = isSmallScreen
+                  ? screenWidth *
+                        0.28 // 28% of screen on mobile
+                  : (isMediumScreen ? 140.0 : 160.0);
 
-          // Translate up so the cards visually dock into the header above
-          final translateY = isSmallScreen ? -36.0 : -44.0;
-          return Transform.translate(
-            offset: Offset(0, translateY),
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: isSmallScreen ? 16 : 24,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildStatCard(
-                    icon: Icons.menu_book_rounded,
-                    label: 'Courses',
-                    value: '12',
-                    width: cardWidth,
-                    cardPadding: cardPadding,
-                    iconSize: iconSize,
-                    valueFontSize: valueFontSize,
-                    labelFontSize: labelFontSize,
+              final cardPadding = isSmallScreen ? 16.0 : 20.0;
+              final iconSize = isSmallScreen ? 26.0 : 32.0;
+              final valueFontSize = isSmallScreen ? 20.0 : 24.0;
+              final labelFontSize = isSmallScreen ? 11.0 : 13.0;
+              final gapBetweenCards = isSmallScreen ? 12.0 : 16.0;
+
+              // Translate up so the cards visually dock into the header above
+              final translateY = isSmallScreen ? -36.0 : -44.0;
+              return Transform.translate(
+                offset: Offset(0, translateY),
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 16 : 24,
                   ),
-                  SizedBox(width: gapBetweenCards),
-                  _buildStatCard(
-                    icon: Icons.timer_outlined,
-                    label: 'Pending',
-                    value: '3',
-                    width: cardWidth,
-                    cardPadding: cardPadding,
-                    iconSize: iconSize,
-                    valueFontSize: valueFontSize,
-                    labelFontSize: labelFontSize,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildStatCard(
+                        icon: Icons.menu_book_rounded,
+                        label: 'Courses',
+                        value: '12',
+                        width: cardWidth,
+                        cardPadding: cardPadding,
+                        iconSize: iconSize,
+                        valueFontSize: valueFontSize,
+                        labelFontSize: labelFontSize,
+                      ),
+                      SizedBox(width: gapBetweenCards),
+                      _buildStatCard(
+                        icon: Icons.timer_outlined,
+                        label: 'Pending',
+                        value: pendingValue,
+                        width: cardWidth,
+                        cardPadding: cardPadding,
+                        iconSize: iconSize,
+                        valueFontSize: valueFontSize,
+                        labelFontSize: labelFontSize,
+                      ),
+                      SizedBox(width: gapBetweenCards),
+                      _buildStatCard(
+                        icon: Icons.bar_chart_rounded,
+                        label: 'GPA',
+                        value: '3.8',
+                        width: cardWidth,
+                        cardPadding: cardPadding,
+                        iconSize: iconSize,
+                        valueFontSize: valueFontSize,
+                        labelFontSize: labelFontSize,
+                      ),
+                    ],
                   ),
-                  SizedBox(width: gapBetweenCards),
-                  _buildStatCard(
-                    icon: Icons.bar_chart_rounded,
-                    label: 'GPA',
-                    value: '3.8',
-                    width: cardWidth,
-                    cardPadding: cardPadding,
-                    iconSize: iconSize,
-                    valueFontSize: valueFontSize,
-                    labelFontSize: labelFontSize,
-                  ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           );
         },
       ),

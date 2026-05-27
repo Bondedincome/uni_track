@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:uni_track/shared/services/local_storage_service.dart';
 
-class UpcomingDeadlines extends StatelessWidget {
+class UpcomingDeadlines extends StatefulWidget {
   const UpcomingDeadlines({super.key});
 
+  @override
+  State<UpcomingDeadlines> createState() => _UpcomingDeadlinesState();
+}
+
+class _UpcomingDeadlinesState extends State<UpcomingDeadlines> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -18,21 +24,7 @@ class UpcomingDeadlines extends StatelessWidget {
         screenWidth * 0.05,
         screenHeight * 0.03,
       ),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        // borderRadius: const BorderRadius.only(
-        //   bottomLeft: Radius.circular(30),
-        //   bottomRight: Radius.circular(30),
-        // ),
-        // boxShadow: [
-        //   BoxShadow(
-        //     color: Colors.black.withOpacity(0.04),
-        //     spreadRadius: 1,
-        //     blurRadius: 12,
-        //     offset: const Offset(0, 4),
-        //   ),
-        // ],
-      ),
+      decoration: BoxDecoration(color: theme.cardColor),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -47,59 +39,141 @@ class UpcomingDeadlines extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              InkWell(
-                onTap: () {},
-                borderRadius: BorderRadius.circular(20),
-                child: Row(
-                  children: [
-                    Text(
-                      "See all",
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: primary,
-                        fontWeight: FontWeight.w600,
-                      ),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: _onAddDeadline,
+                    icon: const Icon(Icons.add),
+                    tooltip: 'Add deadline',
+                  ),
+                  InkWell(
+                    onTap: () {},
+                    borderRadius: BorderRadius.circular(20),
+                    child: Row(
+                      children: [
+                        Text(
+                          "See all",
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.keyboard_arrow_right_rounded,
+                          color: primary,
+                          size: 20,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.keyboard_arrow_right_rounded,
-                      color: primary,
-                      size: 20,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
 
           const SizedBox(height: 16),
 
-          // Deadline Item 1 - CS301
-          _buildDeadlineItem(
-            courseCode: "CS301",
-            assignment: "Binary Tree Implementation",
-            color: Colors.blue,
-          ),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: localStorageService.getDeadlines(),
+            builder: (context, snapshot) {
+              final items = snapshot.hasData ? snapshot.data! : [];
+              if (items.isEmpty) return const SizedBox.shrink();
 
-          const SizedBox(height: 12),
+              return Column(
+                children: List.generate(items.length, (index) {
+                  final item = items[index];
+                  final course = item['course'] as String? ?? '';
+                  final assignment = item['assignment'] as String? ?? '';
+                  final color = _colorFromName(item['color'] as String?);
 
-          // Deadline Item 2 - MATH201
-          _buildDeadlineItem(
-            courseCode: "MATH201",
-            assignment: "Problem Set 4",
-            color: Colors.orange,
-          ),
-
-          const SizedBox(height: 12),
-
-          // Deadline Item 3 - CS302
-          _buildDeadlineItem(
-            courseCode: "CS302",
-            assignment: "Sorting Algorithm Analysis",
-            color: Colors.green,
+                  return Column(
+                    children: [
+                      _buildDeadlineItem(
+                        courseCode: course,
+                        assignment: assignment,
+                        color: color,
+                      ),
+                      if (index != items.length - 1) const SizedBox(height: 12),
+                    ],
+                  );
+                }),
+              );
+            },
           ),
         ],
       ),
     );
+  }
+
+  void _onAddDeadline() async {
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) {
+        final courseCtrl = TextEditingController();
+        final assignmentCtrl = TextEditingController();
+        String color = 'blue';
+
+        return AlertDialog(
+          title: const Text('Add deadline'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: courseCtrl,
+                  decoration: const InputDecoration(labelText: 'Course code'),
+                ),
+                TextField(
+                  controller: assignmentCtrl,
+                  decoration: const InputDecoration(labelText: 'Assignment'),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: color,
+                  items: const [
+                    DropdownMenuItem(value: 'blue', child: Text('Blue')),
+                    DropdownMenuItem(value: 'orange', child: Text('Orange')),
+                    DropdownMenuItem(value: 'green', child: Text('Green')),
+                  ],
+                  onChanged: (v) => color = v ?? 'blue',
+                  decoration: const InputDecoration(labelText: 'Color'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(ctx).pop({
+                  'course': courseCtrl.text.trim(),
+                  'assignment': assignmentCtrl.text.trim(),
+                  'color': color,
+                });
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != null) {
+      final items = await localStorageService.getDeadlines();
+      final id = 'd${DateTime.now().millisecondsSinceEpoch}';
+      items.add({
+        'id': id,
+        'course': result['course'],
+        'assignment': result['assignment'],
+        'color': result['color'],
+      });
+      await localStorageService.saveDeadlines(items);
+      setState(() {});
+    }
   }
 
   Widget _buildDeadlineItem({
@@ -172,5 +246,17 @@ class UpcomingDeadlines extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Color _colorFromName(String? name) {
+    switch (name) {
+      case 'orange':
+        return Colors.orange;
+      case 'green':
+        return Colors.green;
+      case 'blue':
+      default:
+        return Colors.blue;
+    }
   }
 }

@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:uni_track/shared/services/local_storage_service.dart';
 
-class TodaySchedule extends StatelessWidget {
+class TodaySchedule extends StatefulWidget {
   const TodaySchedule({super.key});
 
+  @override
+  State<TodaySchedule> createState() => _TodayScheduleState();
+}
+
+class _TodayScheduleState extends State<TodaySchedule> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -18,21 +24,7 @@ class TodaySchedule extends StatelessWidget {
         screenWidth * 0.05,
         screenHeight * 0.03,
       ),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        // borderRadius: const BorderRadius.only(
-        //   bottomLeft: Radius.circular(30),
-        //   bottomRight: Radius.circular(30),
-        // ),
-        // boxShadow: [
-        //   BoxShadow(
-        //     color: Colors.black.withOpacity(0.04),
-        //     spreadRadius: 1,
-        //     blurRadius: 12,
-        //     offset: const Offset(0, 4),
-        //   ),
-        // ],
-      ),
+      decoration: BoxDecoration(color: theme.cardColor),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -47,62 +39,154 @@ class TodaySchedule extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              InkWell(
-                onTap: () {},
-                borderRadius: BorderRadius.circular(20),
-                child: Row(
-                  children: [
-                    Text(
-                      "View all",
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: primary,
-                        fontWeight: FontWeight.w600,
-                      ),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: _onAddSchedule,
+                    icon: const Icon(Icons.add),
+                    tooltip: 'Add schedule',
+                  ),
+                  InkWell(
+                    onTap: () {},
+                    borderRadius: BorderRadius.circular(20),
+                    child: Row(
+                      children: [
+                        Text(
+                          "View all",
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.keyboard_arrow_right_rounded,
+                          color: primary,
+                          size: 20,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.keyboard_arrow_right_rounded,
-                      color: primary,
-                      size: 20,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
 
           const SizedBox(height: 16),
 
-          // Schedule Item 1 - CS301 Data Structures
-          _buildScheduleItem(
-            courseCode: "CS301 Data Structures",
-            location: "Lab B-204",
-            color: Colors.blue,
-            time: "09:00 AM",
-          ),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: localStorageService.getSchedule(),
+            builder: (context, snapshot) {
+              final items = snapshot.hasData ? snapshot.data! : [];
+              if (items.isEmpty) {
+                return const SizedBox.shrink();
+              }
 
-          const SizedBox(height: 16),
+              return Column(
+                children: List.generate(items.length, (index) {
+                  final item = items[index];
+                  final color = _colorFromName(item['color'] as String?);
+                  final time = item['time'] as String?;
+                  final course = item['course'] as String? ?? '';
+                  final location = item['location'] as String? ?? '';
 
-          // Schedule Item 2 - MATH201 Calculus II
-          _buildScheduleItem(
-            courseCode: "MATH201 Calculus II",
-            location: "Room A-101",
-            color: Colors.orange,
-            time: "11:30 AM",
-          ),
-
-          const SizedBox(height: 16),
-
-          // Schedule Item 3 - ENG101 Tech Writing
-          _buildScheduleItem(
-            courseCode: "ENG101 Tech Writing",
-            location: "Room C-305",
-            color: Colors.green,
-            time: "02:00 PM",
+                  return Column(
+                    children: [
+                      _buildScheduleItem(
+                        courseCode: course,
+                        location: location,
+                        color: color,
+                        time: time,
+                      ),
+                      if (index != items.length - 1) const SizedBox(height: 16),
+                    ],
+                  );
+                }),
+              );
+            },
           ),
         ],
       ),
     );
+  }
+
+  void _onAddSchedule() async {
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) {
+        final courseCtrl = TextEditingController();
+        final locationCtrl = TextEditingController();
+        final timeCtrl = TextEditingController();
+        String color = 'blue';
+
+        return AlertDialog(
+          title: const Text('Add schedule item'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: courseCtrl,
+                  decoration: const InputDecoration(labelText: 'Course'),
+                ),
+                TextField(
+                  controller: locationCtrl,
+                  decoration: const InputDecoration(labelText: 'Location'),
+                ),
+                TextField(
+                  controller: timeCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Time (e.g. 09:00 AM)',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: color,
+                  items: const [
+                    DropdownMenuItem(value: 'blue', child: Text('Blue')),
+                    DropdownMenuItem(value: 'orange', child: Text('Orange')),
+                    DropdownMenuItem(value: 'green', child: Text('Green')),
+                  ],
+                  onChanged: (v) => color = v ?? 'blue',
+                  decoration: const InputDecoration(labelText: 'Color'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(ctx).pop({
+                  'course': courseCtrl.text.trim(),
+                  'location': locationCtrl.text.trim(),
+                  'time': timeCtrl.text.trim(),
+                  'color': color,
+                });
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != null) {
+      final items = await localStorageService.getSchedule();
+      final id = 's${DateTime.now().millisecondsSinceEpoch}';
+      items.add({
+        'id': id,
+        'course': result['course'],
+        'location': result['location'],
+        'time': result['time'],
+        'color': result['color'],
+      });
+      await localStorageService.saveSchedule(items);
+      setState(() {});
+    }
   }
 
   Widget _buildScheduleItem({
@@ -211,5 +295,17 @@ class TodaySchedule extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Color _colorFromName(String? name) {
+    switch (name) {
+      case 'orange':
+        return Colors.orange;
+      case 'green':
+        return Colors.green;
+      case 'blue':
+      default:
+        return Colors.blue;
+    }
   }
 }
