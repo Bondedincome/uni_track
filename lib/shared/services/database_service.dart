@@ -3,12 +3,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/courses/models/course.dart';
 import '../../features/assignments/models/assignment.dart';
 import '../../features/gpa/models/grade_record.dart';
+import '../../features/schedule/models/schedule_item.dart';
 import 'storage_adapter.dart';
 
 class DatabaseService {
   static const String _coursesKey = 'courses';
   static const String _assignmentsKey = 'assignments';
   static const String _gradesKey = 'grades';
+  static const String _scheduleKey = 'schedule_items';
 
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
   // Helper to get underlying string list and migrate if needed
@@ -70,5 +72,18 @@ class DatabaseService {
   Future<void> saveGrades(List<GradeRecord> grades) async {
     final gradesJson = grades.map((g) => jsonEncode(g.toJson())).toList();
     await _setRawList(_gradesKey, gradesJson);
+  }
+
+  // Schedule
+  Future<List<ScheduleItem>> getScheduleItems() async {
+    final scheduleJson = await _getRawList(_scheduleKey);
+    return scheduleJson
+        .map((json) => ScheduleItem.fromJson(jsonDecode(json)))
+        .toList();
+  }
+
+  Future<void> saveScheduleItems(List<ScheduleItem> items) async {
+    final scheduleJson = items.map((s) => jsonEncode(s.toJson())).toList();
+    await _setRawList(_scheduleKey, scheduleJson);
   }
 }

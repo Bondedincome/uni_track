@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:uni_track/shared/services/local_storage_service.dart';
+import 'package:provider/provider.dart';
+import 'package:uni_track/features/courses/models/course.dart';
+import 'package:uni_track/features/courses/services/courses_provider.dart';
+import 'package:uni_track/features/schedule/models/schedule_item.dart';
+import 'package:uni_track/features/schedule/services/schedule_provider.dart';
 
-class TodaySchedule extends StatefulWidget {
+class TodaySchedule extends StatelessWidget {
   const TodaySchedule({super.key});
 
-  @override
-  State<TodaySchedule> createState() => _TodayScheduleState();
-}
-
-class _TodayScheduleState extends State<TodaySchedule> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -29,7 +28,6 @@ class _TodayScheduleState extends State<TodaySchedule> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -42,9 +40,9 @@ class _TodayScheduleState extends State<TodaySchedule> {
               Row(
                 children: [
                   IconButton(
-                    onPressed: _onAddSchedule,
+                    onPressed: () => _showItemDialog(context),
                     icon: const Icon(Icons.add),
-                    tooltip: 'Add schedule',
+                    tooltip: 'Add schedule item',
                   ),
                   InkWell(
                     onTap: () {},
@@ -52,7 +50,7 @@ class _TodayScheduleState extends State<TodaySchedule> {
                     child: Row(
                       children: [
                         Text(
-                          "View all",
+                          'View all',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: primary,
                             fontWeight: FontWeight.w600,
@@ -71,32 +69,39 @@ class _TodayScheduleState extends State<TodaySchedule> {
               ),
             ],
           ),
-
           const SizedBox(height: 16),
+          Consumer2<ScheduleProvider, CoursesProvider>(
+            builder: (context, scheduleProvider, coursesProvider, _) {
+              final items = scheduleProvider.itemsForToday();
 
-          FutureBuilder<List<Map<String, dynamic>>>(
-            future: localStorageService.getSchedule(),
-            builder: (context, snapshot) {
-              final items = snapshot.hasData ? snapshot.data! : [];
               if (items.isEmpty) {
-                return const SizedBox.shrink();
+                return _buildEmptyState();
               }
 
               return Column(
                 children: List.generate(items.length, (index) {
                   final item = items[index];
-                  final color = _colorFromName(item['color'] as String?);
-                  final time = item['time'] as String?;
-                  final course = item['course'] as String? ?? '';
-                  final location = item['location'] as String? ?? '';
+                  final course = _findCourse(
+                    coursesProvider.courses,
+                    item.courseId,
+                  );
+                  final color = course?.color ?? Colors.blueGrey;
+                  final courseLabel = course?.code ?? 'Personal';
+                  final title = item.title.isNotEmpty
+                      ? item.title
+                      : (course?.name ?? 'Schedule item');
 
                   return Column(
                     children: [
                       _buildScheduleItem(
-                        courseCode: course,
-                        location: location,
+                        context: context,
+                        scheduleProvider: scheduleProvider,
+                        item: item,
+                        courseLabel: courseLabel,
+                        title: title,
+                        location: item.location ?? '',
                         color: color,
-                        time: time,
+                        time: _formatTime(item.time),
                       ),
                       if (index != items.length - 1) const SizedBox(height: 16),
                     ],
@@ -110,152 +115,133 @@ class _TodayScheduleState extends State<TodaySchedule> {
     );
   }
 
-  void _onAddSchedule() async {
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (ctx) {
-        final courseCtrl = TextEditingController();
-        final locationCtrl = TextEditingController();
-        final timeCtrl = TextEditingController();
-        String color = 'blue';
+  Course? _findCourse(List<Course> courses, String? courseId) {
+    if (courseId == null) return null;
+    for (final c in courses) {
+      if (c.id == courseId) return c;
+    }
+    return null;
+  }
 
-        return AlertDialog(
-          title: const Text('Add schedule item'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: courseCtrl,
-                  decoration: const InputDecoration(labelText: 'Course'),
-                ),
-                TextField(
-                  controller: locationCtrl,
-                  decoration: const InputDecoration(labelText: 'Location'),
-                ),
-                TextField(
-                  controller: timeCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Time (e.g. 09:00 AM)',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: color,
-                  items: const [
-                    DropdownMenuItem(value: 'blue', child: Text('Blue')),
-                    DropdownMenuItem(value: 'orange', child: Text('Orange')),
-                    DropdownMenuItem(value: 'green', child: Text('Green')),
-                  ],
-                  onChanged: (v) => color = v ?? 'blue',
-                  decoration: const InputDecoration(labelText: 'Color'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(ctx).pop({
-                  'course': courseCtrl.text.trim(),
-                  'location': locationCtrl.text.trim(),
-                  'time': timeCtrl.text.trim(),
-                  'color': color,
-                });
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      alignment: Alignment.center,
+      child: Text(
+        'Nothing scheduled for today',
+        style: TextStyle(color: Colors.grey[600], fontSize: 14),
+      ),
+    );
+  }
+
+  String _formatTime(String hhmm) {
+    final parts = hhmm.split(':');
+    if (parts.length != 2) return hhmm;
+    final h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts[1]) ?? 0;
+    final period = h >= 12 ? 'PM' : 'AM';
+    final hour12 = h % 12 == 0 ? 12 : h % 12;
+    final mm = m.toString().padLeft(2, '0');
+    return '$hour12:$mm $period';
+  }
+
+  Future<void> _showItemDialog(
+    BuildContext context, {
+    ScheduleItem? existing,
+  }) async {
+    final coursesProvider = context.read<CoursesProvider>();
+    final scheduleProvider = context.read<ScheduleProvider>();
+
+    final result = await showDialog<ScheduleItem>(
+      context: context,
+      builder: (ctx) => _ScheduleItemDialog(
+        existing: existing,
+        courses: coursesProvider.courses,
+      ),
     );
 
-    if (result != null) {
-      final items = await localStorageService.getSchedule();
-      final id = 's${DateTime.now().millisecondsSinceEpoch}';
-      items.add({
-        'id': id,
-        'course': result['course'],
-        'location': result['location'],
-        'time': result['time'],
-        'color': result['color'],
-      });
-      await localStorageService.saveSchedule(items);
-      setState(() {});
+    if (result == null) return;
+
+    if (existing == null) {
+      await scheduleProvider.addItem(result);
+    } else {
+      await scheduleProvider.updateItem(existing.id, result);
     }
   }
 
   Widget _buildScheduleItem({
-    required String courseCode,
+    required BuildContext context,
+    required ScheduleProvider scheduleProvider,
+    required ScheduleItem item,
+    required String courseLabel,
+    required String title,
     required String location,
     required Color color,
-    String? time,
+    required String time,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.withOpacity(0.18), width: 1),
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.transparent,
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Row(
-        children: [
-          // Colored vertical indicator
-          Container(
-            width: 4,
-            height: 44,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(4),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withOpacity(0.12),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Course and location
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  courseCode,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: Colors.black87,
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _showItemDialog(context, existing: item),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.withOpacity(0.18), width: 1),
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.transparent,
+        ),
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Container(
+              width: 4,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(4),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(0.12),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.location_on_outlined,
-                      size: 14,
-                      color: Colors.grey[500],
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$courseLabel · $title',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: Colors.black87,
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      location,
-                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (location.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 14,
+                          color: Colors.grey[500],
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          location,
+                          style:
+                              TextStyle(color: Colors.grey[600], fontSize: 13),
+                        ),
+                      ],
                     ),
                   ],
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-
-          // Time with calendar icon (if provided)
-          if (time != null) ...[
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
@@ -283,29 +269,257 @@ class _TodayScheduleState extends State<TodaySchedule> {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
+            PopupMenuButton<String>(
+              padding: EdgeInsets.zero,
+              icon: Icon(Icons.more_vert, size: 18, color: Colors.grey[400]),
+              onSelected: (value) {
+                if (value == 'edit') {
+                  _showItemDialog(context, existing: item);
+                } else if (value == 'delete') {
+                  scheduleProvider.deleteItem(item.id);
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'edit', child: Text('Edit')),
+                PopupMenuItem(
+                  value: 'delete',
+                  child:
+                      Text('Delete', style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            ),
           ],
-
-          // Chevron
-          Icon(
-            Icons.keyboard_arrow_right_rounded,
-            color: Colors.grey[400],
-            size: 22,
-          ),
-        ],
+        ),
       ),
     );
   }
+}
 
-  Color _colorFromName(String? name) {
-    switch (name) {
-      case 'orange':
-        return Colors.orange;
-      case 'green':
-        return Colors.green;
-      case 'blue':
-      default:
-        return Colors.blue;
+class _ScheduleItemDialog extends StatefulWidget {
+  final ScheduleItem? existing;
+  final List<Course> courses;
+
+  const _ScheduleItemDialog({this.existing, required this.courses});
+
+  @override
+  State<_ScheduleItemDialog> createState() => _ScheduleItemDialogState();
+}
+
+class _ScheduleItemDialogState extends State<_ScheduleItemDialog> {
+  late final TextEditingController _titleCtrl;
+  late final TextEditingController _locationCtrl;
+  late TimeOfDay _time;
+  late ScheduleRecurrence _recurrence;
+  int? _dayOfWeek;
+  DateTime? _date;
+  String? _courseId;
+
+  static const _weekdayLabels = {
+    1: 'Monday',
+    2: 'Tuesday',
+    3: 'Wednesday',
+    4: 'Thursday',
+    5: 'Friday',
+    6: 'Saturday',
+    7: 'Sunday',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.existing;
+    _titleCtrl = TextEditingController(text: e?.title ?? '');
+    _locationCtrl = TextEditingController(text: e?.location ?? '');
+    _recurrence = e?.recurrence ?? ScheduleRecurrence.weekly;
+    _dayOfWeek = e?.dayOfWeek ?? DateTime.now().weekday;
+    _date = e?.date;
+    _courseId = e?.courseId;
+
+    if (e != null) {
+      final parts = e.time.split(':');
+      _time = TimeOfDay(
+        hour: int.tryParse(parts.first) ?? 9,
+        minute: parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0,
+      );
+    } else {
+      _time = const TimeOfDay(hour: 9, minute: 0);
     }
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _locationCtrl.dispose();
+    super.dispose();
+  }
+
+  String get _timeAsHHmm =>
+      '${_time.hour.toString().padLeft(2, '0')}:${_time.minute.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        widget.existing == null ? 'Add schedule item' : 'Edit schedule item',
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _titleCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Title (e.g. Lecture, Lab, Career fair)',
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String?>(
+              value: _courseId,
+              decoration: const InputDecoration(labelText: 'Course (optional)'),
+              items: <DropdownMenuItem<String?>>[
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('Standalone (no course)'),
+                ),
+                ...widget.courses.map(
+                  (c) => DropdownMenuItem<String?>(
+                    value: c.id,
+                    child: Text('${c.code} · ${c.name}'),
+                  ),
+                ),
+              ],
+              onChanged: (v) => setState(() => _courseId = v),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _locationCtrl,
+              decoration:
+                  const InputDecoration(labelText: 'Location (optional)'),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: RadioListTile<ScheduleRecurrence>(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Weekly'),
+                    value: ScheduleRecurrence.weekly,
+                    groupValue: _recurrence,
+                    onChanged: (v) => setState(() {
+                      _recurrence = v!;
+                    }),
+                  ),
+                ),
+                Expanded(
+                  child: RadioListTile<ScheduleRecurrence>(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('One-off'),
+                    value: ScheduleRecurrence.oneOff,
+                    groupValue: _recurrence,
+                    onChanged: (v) => setState(() {
+                      _recurrence = v!;
+                    }),
+                  ),
+                ),
+              ],
+            ),
+            if (_recurrence == ScheduleRecurrence.weekly)
+              DropdownButtonFormField<int>(
+                value: _dayOfWeek,
+                decoration: const InputDecoration(labelText: 'Day of week'),
+                items: _weekdayLabels.entries
+                    .map(
+                      (e) => DropdownMenuItem<int>(
+                        value: e.key,
+                        child: Text(e.value),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) => setState(() => _dayOfWeek = v),
+              )
+            else
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Date'),
+                subtitle: Text(
+                  _date == null
+                      ? 'Pick a date'
+                      : '${_date!.year}-${_date!.month.toString().padLeft(2, '0')}-${_date!.day.toString().padLeft(2, '0')}',
+                ),
+                trailing: const Icon(Icons.calendar_today),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _date ?? DateTime.now(),
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2100),
+                  );
+                  if (picked != null) {
+                    setState(() => _date = picked);
+                  }
+                },
+              ),
+            const SizedBox(height: 8),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Time'),
+              subtitle: Text(_time.format(context)),
+              trailing: const Icon(Icons.access_time),
+              onTap: () async {
+                final picked =
+                    await showTimePicker(context: context, initialTime: _time);
+                if (picked != null) setState(() => _time = picked);
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _onSave,
+          child: Text(widget.existing == null ? 'Add' : 'Save'),
+        ),
+      ],
+    );
+  }
+
+  void _onSave() {
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a title')),
+      );
+      return;
+    }
+
+    if (_recurrence == ScheduleRecurrence.oneOff && _date == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please pick a date')),
+      );
+      return;
+    }
+
+    final id = widget.existing?.id ??
+        's${DateTime.now().millisecondsSinceEpoch}';
+    final location = _locationCtrl.text.trim();
+
+    final item = ScheduleItem(
+      id: id,
+      courseId: _courseId,
+      title: title,
+      location: location.isEmpty ? null : location,
+      time: _timeAsHHmm,
+      recurrence: _recurrence,
+      dayOfWeek:
+          _recurrence == ScheduleRecurrence.weekly ? _dayOfWeek : null,
+      date: _recurrence == ScheduleRecurrence.oneOff ? _date : null,
+    );
+
+    Navigator.of(context).pop(item);
   }
 }

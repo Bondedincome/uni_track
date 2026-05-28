@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:uni_track/core/theme/app_theme.dart';
+import 'package:uni_track/features/assignments/services/assignments_provider.dart';
 import 'package:uni_track/features/dashboard/widgets/semester_progress.dart';
-import 'package:uni_track/shared/services/local_storage_service.dart';
 
 class DashboardHeader extends StatelessWidget {
   const DashboardHeader({super.key});
@@ -10,6 +11,10 @@ class DashboardHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
+
+    final now = DateTime.now();
+    final dateLabel = _formatDate(now);
+    final greeting = _greetingForHour(now.hour);
 
     return Container(
       width: double.infinity,
@@ -43,9 +48,8 @@ class DashboardHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Date at top left
           Text(
-            "Thursday, March 12",
+            dateLabel,
             style: TextStyle(
               color: AppTheme.accentBabyBlue.withOpacity(0.9),
               fontSize: 14,
@@ -53,62 +57,46 @@ class DashboardHeader extends StatelessWidget {
             ),
           ),
           SizedBox(height: screenHeight * 0.01),
-
-          // Row with greeting and profile pic
-          FutureBuilder<List<dynamic>>(
-            future: Future.wait([
-              localStorageService.getUserName(),
-              localStorageService.getPendingAssignmentsCount(),
-            ]),
-            builder: (context, snapshot) {
-              final name = snapshot.hasData
-                  ? (snapshot.data![0] as String)
-                  : 'Alex';
-
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Greeting text
-                  Text(
-                    "Good morning, $name 👋",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.5,
-                    ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                '$greeting 👋',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppTheme.accentBabyBlue,
+                    width: 2,
                   ),
-
-                  // Profile picture at top right
-                  Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppTheme.accentBabyBlue,
-                        width: 2,
-                      ),
-                    ),
-                    child: const CircleAvatar(
-                      radius: 22,
-                      backgroundColor: Colors.white24,
-                      child: Icon(Icons.person, color: Colors.white, size: 26),
-                    ),
-                  ),
-                ],
-              );
-            },
+                ),
+                child: const CircleAvatar(
+                  radius: 22,
+                  backgroundColor: Colors.white24,
+                  child: Icon(Icons.person, color: Colors.white, size: 26),
+                ),
+              ),
+            ],
           ),
-
           SizedBox(height: screenHeight * 0.015),
-
-          // Pending assignments text
-          FutureBuilder<int>(
-            future: localStorageService.getPendingAssignmentsCount(),
-            builder: (context, snapshot) {
-              final count = snapshot.hasData ? snapshot.data! : 0;
+          Consumer<AssignmentsProvider>(
+            builder: (context, assignmentsProvider, _) {
+              final count = assignmentsProvider.assignments
+                  .where((a) => !a.completed)
+                  .length;
+              final word = count == 1 ? 'assignment' : 'assignments';
               return Text(
-                "You have $count pending assignments",
+                count == 0
+                    ? "You're all caught up — no pending assignments"
+                    : 'You have $count pending $word',
                 style: const TextStyle(color: Colors.white70, fontSize: 15),
               );
             },
@@ -119,5 +107,40 @@ class DashboardHeader extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _greetingForHour(int hour) {
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  String _formatDate(DateTime d) {
+    const days = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    final dayName = days[d.weekday - 1];
+    final monthName = months[d.month - 1];
+    return '$dayName, $monthName ${d.day}';
   }
 }

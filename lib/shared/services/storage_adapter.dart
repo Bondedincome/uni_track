@@ -57,6 +57,34 @@ class StorageAdapter {
     }
   }
 
+  static Future<String?> getString(String key) async {
+    if (_useHive && _box != null) {
+      final val = _box!.get(key);
+      return val is String ? val : null;
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(key);
+    }
+  }
+
+  static Future<void> setString(String key, String value) async {
+    if (_useHive && _box != null) {
+      await _box!.put(key, value);
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, value);
+    }
+  }
+
+  static Future<void> remove(String key) async {
+    if (_useHive && _box != null) {
+      await _box!.delete(key);
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(key);
+    }
+  }
+
   /// Migrate a key from SharedPreferences (sourceList) into Hive box.
   static Future<void> migrateKeyFromPrefs(
     String key,

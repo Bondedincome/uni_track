@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:uni_track/shared/services/local_storage_service.dart';
+import 'package:provider/provider.dart';
+import 'package:uni_track/features/assignments/services/assignments_provider.dart';
+import 'package:uni_track/features/courses/models/course.dart';
+import 'package:uni_track/features/courses/services/courses_provider.dart';
 
-class UpcomingDeadlines extends StatefulWidget {
+class UpcomingDeadlines extends StatelessWidget {
   const UpcomingDeadlines({super.key});
 
-  @override
-  State<UpcomingDeadlines> createState() => _UpcomingDeadlinesState();
-}
+  static const int _maxToShow = 5;
 
-class _UpcomingDeadlinesState extends State<UpcomingDeadlines> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -29,69 +29,69 @@ class _UpcomingDeadlinesState extends State<UpcomingDeadlines> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                "Upcoming Deadlines",
+                'Upcoming Deadlines',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: _onAddDeadline,
-                    icon: const Icon(Icons.add),
-                    tooltip: 'Add deadline',
-                  ),
-                  InkWell(
-                    onTap: () {},
-                    borderRadius: BorderRadius.circular(20),
-                    child: Row(
-                      children: [
-                        Text(
-                          "See all",
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: primary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.keyboard_arrow_right_rounded,
-                          color: primary,
-                          size: 20,
-                        ),
-                      ],
+              InkWell(
+                onTap: () {},
+                borderRadius: BorderRadius.circular(20),
+                child: Row(
+                  children: [
+                    Text(
+                      'See all',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.keyboard_arrow_right_rounded,
+                      color: primary,
+                      size: 20,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-
           const SizedBox(height: 16),
+          Consumer2<AssignmentsProvider, CoursesProvider>(
+            builder: (context, assignmentsProvider, coursesProvider, _) {
+              final upcoming =
+                  assignmentsProvider.assignments
+                      .where((a) => !a.completed)
+                      .toList()
+                    ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
 
-          FutureBuilder<List<Map<String, dynamic>>>(
-            future: localStorageService.getDeadlines(),
-            builder: (context, snapshot) {
-              final items = snapshot.hasData ? snapshot.data! : [];
-              if (items.isEmpty) return const SizedBox.shrink();
+              if (upcoming.isEmpty) {
+                return _buildEmptyState();
+              }
+
+              final items = upcoming.take(_maxToShow).toList();
 
               return Column(
                 children: List.generate(items.length, (index) {
-                  final item = items[index];
-                  final course = item['course'] as String? ?? '';
-                  final assignment = item['assignment'] as String? ?? '';
-                  final color = _colorFromName(item['color'] as String?);
+                  final assignment = items[index];
+                  final course = _findCourse(
+                    coursesProvider.courses,
+                    assignment.courseId,
+                  );
+                  final color = course?.color ?? Colors.blue;
+                  final courseCode = course?.code ?? 'No course';
 
                   return Column(
                     children: [
                       _buildDeadlineItem(
-                        courseCode: course,
-                        assignment: assignment,
+                        courseCode: courseCode,
+                        assignment: assignment.title,
+                        dueDate: assignment.dueDate,
                         color: color,
                       ),
                       if (index != items.length - 1) const SizedBox(height: 12),
@@ -106,83 +106,34 @@ class _UpcomingDeadlinesState extends State<UpcomingDeadlines> {
     );
   }
 
-  void _onAddDeadline() async {
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (ctx) {
-        final courseCtrl = TextEditingController();
-        final assignmentCtrl = TextEditingController();
-        String color = 'blue';
-
-        return AlertDialog(
-          title: const Text('Add deadline'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: courseCtrl,
-                  decoration: const InputDecoration(labelText: 'Course code'),
-                ),
-                TextField(
-                  controller: assignmentCtrl,
-                  decoration: const InputDecoration(labelText: 'Assignment'),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: color,
-                  items: const [
-                    DropdownMenuItem(value: 'blue', child: Text('Blue')),
-                    DropdownMenuItem(value: 'orange', child: Text('Orange')),
-                    DropdownMenuItem(value: 'green', child: Text('Green')),
-                  ],
-                  onChanged: (v) => color = v ?? 'blue',
-                  decoration: const InputDecoration(labelText: 'Color'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(ctx).pop({
-                  'course': courseCtrl.text.trim(),
-                  'assignment': assignmentCtrl.text.trim(),
-                  'color': color,
-                });
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (result != null) {
-      final items = await localStorageService.getDeadlines();
-      final id = 'd${DateTime.now().millisecondsSinceEpoch}';
-      items.add({
-        'id': id,
-        'course': result['course'],
-        'assignment': result['assignment'],
-        'color': result['color'],
-      });
-      await localStorageService.saveDeadlines(items);
-      setState(() {});
+  Course? _findCourse(List<Course> courses, String courseId) {
+    for (final c in courses) {
+      if (c.id == courseId) return c;
     }
+    return null;
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      alignment: Alignment.center,
+      child: Text(
+        'No upcoming deadlines',
+        style: TextStyle(color: Colors.grey[600], fontSize: 14),
+      ),
+    );
   }
 
   Widget _buildDeadlineItem({
     required String courseCode,
     required String assignment,
+    required DateTime dueDate,
     required Color color,
   }) {
     final bg = color.withOpacity(0.06);
     final border = color.withOpacity(0.28);
+    final dueText = _formatDueDate(dueDate);
+
     return Container(
       decoration: BoxDecoration(
         color: bg,
@@ -199,7 +150,6 @@ class _UpcomingDeadlinesState extends State<UpcomingDeadlines> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: [
-          // Colored indicator with course code inside
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
@@ -215,23 +165,31 @@ class _UpcomingDeadlinesState extends State<UpcomingDeadlines> {
               ),
             ),
           ),
-
           const SizedBox(width: 12),
-
-          // Assignment name
           Expanded(
-            child: Text(
-              assignment,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  assignment,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  dueText,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
             ),
           ),
-
-          // Chevron with subtle background
           Container(
             decoration: BoxDecoration(
               color: Colors.grey.withOpacity(0.08),
@@ -248,15 +206,18 @@ class _UpcomingDeadlinesState extends State<UpcomingDeadlines> {
     );
   }
 
-  Color _colorFromName(String? name) {
-    switch (name) {
-      case 'orange':
-        return Colors.orange;
-      case 'green':
-        return Colors.green;
-      case 'blue':
-      default:
-        return Colors.blue;
-    }
+  String _formatDueDate(DateTime dueDate) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final due = DateTime(dueDate.year, dueDate.month, dueDate.day);
+    final diff = due.difference(today).inDays;
+
+    if (diff < 0) return 'Overdue';
+    if (diff == 0) return 'Due today';
+    if (diff == 1) return 'Due tomorrow';
+    if (diff < 7) return 'Due in $diff days';
+    return 'Due ${dueDate.year}-${_pad(dueDate.month)}-${_pad(dueDate.day)}';
   }
+
+  String _pad(int n) => n.toString().padLeft(2, '0');
 }

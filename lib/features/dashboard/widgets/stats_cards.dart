@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:uni_track/core/theme/app_theme.dart';
-import 'package:uni_track/shared/services/local_storage_service.dart';
+import 'package:uni_track/features/assignments/services/assignments_provider.dart';
+import 'package:uni_track/features/courses/services/courses_provider.dart';
+import 'package:uni_track/features/gpa/services/gpa_provider.dart';
 
 class StatsCards extends StatelessWidget {
   const StatsCards({super.key});
@@ -8,10 +11,15 @@ class StatsCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: FutureBuilder<int>(
-        future: localStorageService.getPendingAssignmentsCount(),
-        builder: (context, snap) {
-          final pendingValue = snap.hasData ? snap.data!.toString() : '0';
+      child: Consumer3<CoursesProvider, AssignmentsProvider, GpaProvider>(
+        builder: (context, coursesProvider, assignmentsProvider, gpaProvider, _) {
+          final coursesValue = coursesProvider.courses.length.toString();
+          final pendingValue = assignmentsProvider.assignments
+              .where((a) => !a.completed)
+              .length
+              .toString();
+          final gpa = gpaProvider.calculateGpa();
+          final gpaValue = gpa > 0 ? gpa.toStringAsFixed(2) : '-';
 
           return LayoutBuilder(
             builder: (context, constraints) {
@@ -19,10 +27,8 @@ class StatsCards extends StatelessWidget {
               final isSmallScreen = screenWidth < 600;
               final isMediumScreen = screenWidth >= 600 && screenWidth < 900;
 
-              // Responsive calculations based on available width
               final cardWidth = isSmallScreen
-                  ? screenWidth *
-                        0.28 // 28% of screen on mobile
+                  ? screenWidth * 0.28
                   : (isMediumScreen ? 140.0 : 160.0);
 
               final cardPadding = isSmallScreen ? 16.0 : 20.0;
@@ -31,7 +37,6 @@ class StatsCards extends StatelessWidget {
               final labelFontSize = isSmallScreen ? 11.0 : 13.0;
               final gapBetweenCards = isSmallScreen ? 12.0 : 16.0;
 
-              // Translate up so the cards visually dock into the header above
               final translateY = isSmallScreen ? -36.0 : -44.0;
               return Transform.translate(
                 offset: Offset(0, translateY),
@@ -46,7 +51,7 @@ class StatsCards extends StatelessWidget {
                       _buildStatCard(
                         icon: Icons.menu_book_rounded,
                         label: 'Courses',
-                        value: '12',
+                        value: coursesValue,
                         width: cardWidth,
                         cardPadding: cardPadding,
                         iconSize: iconSize,
@@ -68,7 +73,7 @@ class StatsCards extends StatelessWidget {
                       _buildStatCard(
                         icon: Icons.bar_chart_rounded,
                         label: 'GPA',
-                        value: '3.8',
+                        value: gpaValue,
                         width: cardWidth,
                         cardPadding: cardPadding,
                         iconSize: iconSize,
