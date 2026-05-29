@@ -1,6 +1,6 @@
 name: uni_track
 description: "A new Flutter project."
-publish_to: 'none'
+publish_to: "none"
 version: 0.1.0+1
 
 environment:
@@ -21,6 +21,14 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.11.0
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/Icon.png
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/Icon.png"
